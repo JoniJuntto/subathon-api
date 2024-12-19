@@ -1,7 +1,7 @@
 {
   "name": "personal-subathon-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "main.js",
   "engines": {
     "node": ">=20.0.0"
   },

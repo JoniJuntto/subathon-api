@@ -235,13 +235,12 @@ const start = async () => {
     addSubathonTime(calculateCheerTime(e.bits));
     addEvent({
       event: `Cheer (${e.bits} bits)`,
-      user: e.userDisplayName,
+      user: e.userDisplayName!,
       time: new Date(),
     });
   });
 
   listener.onChannelRaidFrom(userId, (e) => {
-    chatClient.say(e.raidedBroadcasterName, `Lisää kelloon 10 minuuttia!`);
     addSubathonTime(10);
     addEvent({
       event: `Raid (${e.viewers} viewers)`,

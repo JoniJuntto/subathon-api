@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
-    "rootDir": "./src",
-    "outDir": "./dist",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true
+    "target": "ES2020", // JavaScript version to compile to
+    "module": "CommonJS", // Module system for Node.js
+    "outDir": "dist", // Output directory for compiled files
+    "rootDir": "src", // Directory containing source files
+    "strict": true, // Enable all strict type-checking options
+    "esModuleInterop": true, // Required for compatibility with CommonJS modules
+    "skipLibCheck": true // Skip type-checking for dependencies
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*"], // Include all files in the src folder
+  "exclude": ["node_modules", "dist"] // Exclude unnecessary files
 }
