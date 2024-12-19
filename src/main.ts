@@ -50,6 +50,64 @@ let subathonStartTimeUnix: number | null = null;
 let subathonActive: boolean = false;
 let subathonTimeRemaining: number = 0;
 
+type SubathonConfig = {
+  maxEndTime: number; // Sunday 21:00 timestamp
+  maxSleepTime: {
+    night: number; // 4 hours in seconds
+    day: number; // 1 hour in seconds
+  };
+  goals: Map<number, string>;
+  points: number;
+};
+
+let subathonConfig: SubathonConfig = {
+  maxEndTime: 0, // Will be set when subathon starts
+  maxSleepTime: {
+    night: 4 * 60 * 60,
+    day: 1 * 60 * 60,
+  },
+  goals: new Map([
+    [1, "Assembly liput arvontaan 2x2 kpl"],
+    [2, "Korjataan subathon kello"],
+    [3, "Koiranulkoituslive"],
+    [5, "Kissan korvat subathonin ajaks"],
+    [7, "Funlight tier list"],
+    [9, "Kalja ykkösellä"],
+    [10, "Kaljamaili Forsun kanssa"],
+    [11, "Lähetetään Funlightille sponsorointi pyyntö"],
+    [15, "Kokki live (tehää ruokaa emt)"],
+    [17, "Kalja ykkösellä"],
+    [18, "Chat saa päättää aiheen ja scriptin Tiktok videolle"],
+    [20, "Kick kanava"],
+    [25, "Toteutetaan chatin päättämä SaaS idea"],
+    [30, "Kalja ykkösellä"],
+    [31, "Kokkilive"],
+    [40, "Haetaan Jumaljoni"],
+    [50, "Mennään kahville Juhikselle"],
+    [69, "Tehdään katsojien päättämä pizza"],
+    [75, "Jokelan paikalliseen kaljalle (haetaan Wiineri mukaan)"],
+    [84, "1h karaoke"],
+    [100, "Minecraft skywars"],
+    [150, "Perustetaan Minecraft HuikaaPelaa let’s play kanava"],
+    [200, "Juoksukaljat"],
+    [500, "Thaimaahan Pottukoiran kanssa (tarvii pottukoiran hyväksynnän)"],
+    [666, "Kirkkoon"],
+    [667, "Järjestetään reivit ja essot naamaan (ne baarit ei huumeet)"],
+    [900, "Deadline vaihtuu keskiviikkoon"],
+    [1000, "Mutsi koodaa"],
+    [1100, "Viljami messiin"],
+    [1200, "Varahahmo messiin"],
+    [1234, "tilataan naapurille fentanyliä netistä"],
+    [1500, "Haetaan Riinatti"],
+    [2000, "Modien kanssa ruotsin laivalle (juhis tarjoo)"],
+    [2345, "MMA matsi munasillaan isännöitsijän kanssa"],
+    [3000, "Soitetaan duunii"],
+    [4000, "kirjoitetaan kirja jokelassa asumisesta"],
+    [728536, "MAAILMANENNÄTYS (kalja ykkösellä)"],
+  ]),
+  points: 0,
+};
+
 const startSubathon = (initialMinutes: number) => {
   subathonActive = true;
   subathonTimeRemaining = initialMinutes * 60;
@@ -58,10 +116,17 @@ const startSubathon = (initialMinutes: number) => {
 
   eventHistory = [];
 
+  const now = new Date();
+  const sunday = new Date();
+  sunday.setDate(now.getDate() + (7 - now.getDay()));
+  sunday.setHours(21, 0, 0, 0);
+  subathonConfig.maxEndTime = Math.floor(sunday.getTime() / 1000);
+
   io.emit("subathonUpdate", {
     timeRemaining: subathonTimeRemaining,
     isActive: subathonActive,
     events: eventHistory,
+    config: subathonConfig,
   });
 };
 
@@ -111,6 +176,11 @@ const addSubathonTime = (minutes: number) => {
       events: eventHistory,
     });
   }
+};
+
+const addPoints = (amount: number) => {
+  subathonConfig.points += amount;
+  io.emit("pointsUpdate", subathonConfig.points);
 };
 
 const start = async () => {
@@ -202,7 +272,8 @@ const start = async () => {
 
   listener.onChannelSubscription(userId, (e) => {
     console.log(`${e.broadcasterDisplayName} just subscribed!`);
-    addSubathonTime(4);
+    addSubathonTime(10);
+    addPoints(1);
     addEvent({
       event: "Subscription",
       user: e.userDisplayName,
@@ -231,8 +302,10 @@ const start = async () => {
   });
 
   listener.onChannelCheer(userId, (e) => {
-    console.log(`${e.broadcasterDisplayName} just cheered!`);
-    addSubathonTime(calculateCheerTime(e.bits));
+    const minutes = Math.floor(e.bits / 200) * 5;
+    const points = Math.floor(e.bits / 400);
+    addSubathonTime(minutes);
+    addPoints(points);
     addEvent({
       event: `Cheer (${e.bits} bits)`,
       user: e.userDisplayName!,
