@@ -81,7 +81,8 @@ const endSubathon = () => {
 io.on("connection", (socket: Socket) => {
   console.log("a user connected");
   socket.emit("subathonUpdate", {
-    timeAdded: 0,
+    timeRemaining: subathonTimeRemaining,
+    isActive: subathonActive,
     events: eventHistory,
   });
 
