@@ -1,0 +1,12 @@
+{
+  "accessToken": "vc6boctnkd9qavixo58k9ec62bbjii",
+  "refreshToken": "nartlgrydzm8vsxtzios6flc59h8xayh1la3kf9hduzrpkqgys",
+  "scope": [
+    "channel:manage:redemptions",
+    "channel:read:redemptions",
+    "chat:edit",
+    "chat:read"
+  ],
+  "expiresIn": 0,
+  "obtainmentTimestamp": 0
+}

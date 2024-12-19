@@ -1,0 +1,18 @@
+{
+    "accessToken": "ae5oss0dxbel93iqamij21dvgmalr6",
+    "refreshToken": "dxdybuh0kngwri122o79c6nm0hekllhi9wzesxvnvvjb8ojr7x",
+    "scope": [
+        "bits:read",
+        "channel:manage:polls",
+        "channel:manage:redemptions",
+        "channel:read:polls",
+        "channel:read:redemptions",
+        "channel:read:subscriptions",
+        "chat:edit",
+        "chat:read",
+        "clips:edit",
+        "moderator:read:followers"
+    ],
+    "expiresIn": 13267,
+    "obtainmentTimestamp": 1734631672022
+}
