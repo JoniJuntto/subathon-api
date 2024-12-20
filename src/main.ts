@@ -73,6 +73,7 @@ const getEvents = async () => {
 };
 
 const startSubathon = async (initialMinutes: number) => {
+  console.log(`Starting subathon with ${initialMinutes} initial minutes`);
   const now = Math.floor(Date.now() / 1000);
   const sunday = new Date();
   sunday.setDate(sunday.getDate() + (7 - sunday.getDay()));
@@ -122,6 +123,9 @@ const startSubathon = async (initialMinutes: number) => {
     getEvents(),
   ]);
 
+  console.log(
+    `Subathon started. End time set to: ${new Date(maxEndTime * 1000)}`
+  );
   io.emit("subathonUpdate", {
     timeRemaining: state?.timeRemaining ?? 0,
     isActive: state?.isActive ?? false,
@@ -174,9 +178,11 @@ io.on("connection", async (socket: Socket) => {
 });
 
 const addSubathonTime = async (minutes: number) => {
+  console.log(`Attempting to add ${minutes} minutes to subathon`);
   const state = await getSubathonState();
   if (state?.isActive) {
     const newTimeRemaining = (state.timeRemaining ?? 0) + minutes * 60;
+    console.log(`New time remaining: ${newTimeRemaining} seconds`);
 
     await db.update(subathonStateTable).set({
       timeRemaining: newTimeRemaining,
@@ -195,10 +201,13 @@ const addSubathonTime = async (minutes: number) => {
       events,
       config,
     });
+  } else {
+    console.log("Cannot add time: subathon is not active");
   }
 };
 
 const addPoints = async (amount: number) => {
+  console.log(`Adding ${amount} points`);
   const config = await getSubathonConfig();
   const newPoints = (config?.points ?? 0) + amount;
 
@@ -300,7 +309,7 @@ const start = async () => {
   };
 
   listener.onChannelSubscription(userId, (e) => {
-    console.log(`${e.broadcasterDisplayName} just subscribed!`);
+    console.log(`Subscription received from ${e.userDisplayName}`);
     addSubathonTime(10);
     addPoints(1);
     addEvent({
@@ -333,6 +342,9 @@ const start = async () => {
   listener.onChannelCheer(userId, (e) => {
     const minutes = Math.floor(e.bits / 200) * 5;
     const points = Math.floor(e.bits / 400);
+    console.log(
+      `Cheer received: ${e.bits} bits = ${minutes} minutes and ${points} points`
+    );
     addSubathonTime(minutes);
     addPoints(points);
     addEvent({
@@ -359,6 +371,71 @@ const start = async () => {
     }
   }); */
 };
+
+app.get("/api/amounts/live", async (req, res) => {
+  console.log("Fetching live amounts");
+  try {
+    const [state, config] = await Promise.all([
+      getSubathonState(),
+      getSubathonConfig(),
+    ]);
+
+    console.log("State:", state);
+    console.log("Config:", config);
+    // Calculate counts from events table
+    const events = await getEvents();
+    const stats = events.reduce(
+      (acc, event) => {
+        switch (event.event) {
+          case "Subscription":
+            acc.subCount++;
+            break;
+          case "Follow":
+            acc.followCount++;
+            break;
+          case event.event.match(/Cheer/)?.input:
+            // Extract bits from "Cheer (X bits)"
+            const bits = parseInt(
+              event.event.match(/\((\d+) bits\)/)?.[1] || "0"
+            );
+            acc.bitCount += bits;
+            break;
+        }
+        console.log("returning", acc);
+        return acc;
+      },
+      { subCount: 0, followCount: 0, bitCount: 0, viewerCount: 0 }
+    );
+
+    res.json({
+      ...stats,
+      endTime: state?.endTimeUnix || 0,
+    });
+  } catch (error) {
+    console.error("Error fetching live stats:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/points/now", async (req, res) => {
+  console.log("Fetching points");
+  try {
+    const [state, config] = await Promise.all([
+      getSubathonState(),
+      getSubathonConfig(),
+    ]);
+    console.log("State:", state);
+    console.log("Config:", config);
+
+    res.json({
+      amountOfPoints: config?.points || 0,
+      timeLeft: state?.endTimeUnix || 0,
+    });
+  } catch (error) {
+    console.error("Error fetching points:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
