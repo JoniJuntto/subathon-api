@@ -21,6 +21,8 @@ dotenv.config();
 const app: Application = express();
 const port = process.env.PORT || 8000;
 
+app.use(express.json());
+
 type Event = {
   event: string;
   time: Date;
@@ -38,6 +40,8 @@ const corsOptions = {
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
     "http://localhost:3000",
+    "https://subathon-clock.onrender.com",
+    "https://subathon-lander.onrender.com",
   ],
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -418,23 +422,35 @@ app.get("/api/amounts/live", async (req, res) => {
 });
 
 app.get("/api/points/now", async (req, res) => {
-  console.log("Fetching points");
+  console.log("Accessing /api/points/now endpoint");
   try {
     const [state, config] = await Promise.all([
       getSubathonState(),
       getSubathonConfig(),
     ]);
-    console.log("State:", state);
-    console.log("Config:", config);
 
-    res.json({
-      amountOfPoints: config?.points || 0,
+    console.log("Database query results:", { state, config });
+
+    if (!config) {
+      console.log("No config found");
+      return res.status(404).json({ error: "No configuration found" });
+    }
+
+    const response = {
+      amountOfPoints: config.points || 0,
       timeLeft: state?.endTimeUnix || 0,
-    });
+    };
+
+    console.log("Sending response:", response);
+    return res.json(response);
   } catch (error) {
-    console.error("Error fetching points:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Error in /api/points/now:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
 });
 
 server.listen(port, () => {
