@@ -7,6 +7,14 @@ import { Server, Socket } from "socket.io";
 import express, { Application } from "express";
 import cors from "cors";
 import http from "http";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import {
+  eventsTable,
+  subathonConfigTable,
+  subathonStateTable,
+} from "./db/schema";
+import { eq } from "drizzle-orm";
 
 dotenv.config();
 
@@ -44,111 +52,110 @@ const io = new Server(server, {
 
 app.use(cors(corsOptions));
 
-let eventHistory: Event[] = [];
-let subathonEndTimeUnix: number | null = null;
-let subathonStartTimeUnix: number | null = null;
-let subathonActive: boolean = false;
-let subathonTimeRemaining: number = 0;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-type SubathonConfig = {
-  maxEndTime: number; // Sunday 21:00 timestamp
-  maxSleepTime: {
-    night: number; // 4 hours in seconds
-    day: number; // 1 hour in seconds
-  };
-  goals: Map<number, string>;
-  points: number;
+const db = drizzle(pool);
+
+const getSubathonState = async () => {
+  const state = await db.select().from(subathonStateTable).limit(1);
+  return state[0] ?? null;
 };
 
-let subathonConfig: SubathonConfig = {
-  maxEndTime: 0, // Will be set when subathon starts
-  maxSleepTime: {
-    night: 4 * 60 * 60,
-    day: 1 * 60 * 60,
-  },
-  goals: new Map([
-    [1, "Assembly liput arvontaan 2x2 kpl"],
-    [2, "Korjataan subathon kello"],
-    [3, "Koiranulkoituslive"],
-    [5, "Kissan korvat subathonin ajaks"],
-    [7, "Funlight tier list"],
-    [9, "Kalja ykkösellä"],
-    [10, "Kaljamaili Forsun kanssa"],
-    [11, "Lähetetään Funlightille sponsorointi pyyntö"],
-    [15, "Kokki live (tehää ruokaa emt)"],
-    [17, "Kalja ykkösellä"],
-    [18, "Chat saa päättää aiheen ja scriptin Tiktok videolle"],
-    [20, "Kick kanava"],
-    [25, "Toteutetaan chatin päättämä SaaS idea"],
-    [30, "Kalja ykkösellä"],
-    [31, "Kokkilive"],
-    [40, "Haetaan Jumaljoni"],
-    [50, "Mennään kahville Juhikselle"],
-    [69, "Tehdään katsojien päättämä pizza"],
-    [75, "Jokelan paikalliseen kaljalle (haetaan Wiineri mukaan)"],
-    [84, "1h karaoke"],
-    [100, "Minecraft skywars"],
-    [150, "Perustetaan Minecraft HuikaaPelaa let’s play kanava"],
-    [200, "Juoksukaljat"],
-    [500, "Thaimaahan Pottukoiran kanssa (tarvii pottukoiran hyväksynnän)"],
-    [666, "Kirkkoon"],
-    [667, "Järjestetään reivit ja essot naamaan (ne baarit ei huumeet)"],
-    [900, "Deadline vaihtuu keskiviikkoon"],
-    [1000, "Mutsi koodaa"],
-    [1100, "Viljami messiin"],
-    [1200, "Varahahmo messiin"],
-    [1234, "tilataan naapurille fentanyliä netistä"],
-    [1500, "Haetaan Riinatti"],
-    [2000, "Modien kanssa ruotsin laivalle (juhis tarjoo)"],
-    [2345, "MMA matsi munasillaan isännöitsijän kanssa"],
-    [3000, "Soitetaan duunii"],
-    [4000, "kirjoitetaan kirja jokelassa asumisesta"],
-    [728536, "MAAILMANENNÄTYS (kalja ykkösellä)"],
-  ]),
-  points: 0,
+const getSubathonConfig = async () => {
+  const config = await db.select().from(subathonConfigTable).limit(1);
+  return config[0] ?? null;
 };
 
-const startSubathon = (initialMinutes: number) => {
-  subathonActive = true;
-  subathonTimeRemaining = initialMinutes * 60;
-  subathonStartTimeUnix = Math.floor(Date.now() / 1000);
-  subathonEndTimeUnix = subathonStartTimeUnix + initialMinutes * 60;
+const getEvents = async () => {
+  return await db.select().from(eventsTable).orderBy(eventsTable.time);
+};
 
-  eventHistory = [];
-
-  const now = new Date();
+const startSubathon = async (initialMinutes: number) => {
+  const now = Math.floor(Date.now() / 1000);
   const sunday = new Date();
-  sunday.setDate(now.getDate() + (7 - now.getDay()));
+  sunday.setDate(sunday.getDate() + (7 - sunday.getDay()));
   sunday.setHours(21, 0, 0, 0);
-  subathonConfig.maxEndTime = Math.floor(sunday.getTime() / 1000);
+  const maxEndTime = Math.floor(sunday.getTime() / 1000);
+
+  await db
+    .insert(subathonConfigTable)
+    .values({
+      maxEndTime,
+      maxSleepTimeNight: 4 * 60 * 60,
+      maxSleepTimeDay: 1 * 60 * 60,
+      goals: {},
+      points: 0,
+    })
+    .onConflictDoUpdate({
+      target: subathonConfigTable.id,
+      set: {
+        maxEndTime,
+        points: 0,
+      },
+    });
+
+  await db
+    .insert(subathonStateTable)
+    .values({
+      isActive: true,
+      startTimeUnix: now,
+      endTimeUnix: now + initialMinutes * 60,
+      timeRemaining: initialMinutes * 60,
+    })
+    .onConflictDoUpdate({
+      target: subathonStateTable.id,
+      set: {
+        isActive: true,
+        startTimeUnix: now,
+        endTimeUnix: now + initialMinutes * 60,
+        timeRemaining: initialMinutes * 60,
+      },
+    });
+
+  await db.delete(eventsTable);
+
+  const [state, config, events] = await Promise.all([
+    getSubathonState(),
+    getSubathonConfig(),
+    getEvents(),
+  ]);
 
   io.emit("subathonUpdate", {
-    timeRemaining: subathonTimeRemaining,
-    isActive: subathonActive,
-    events: eventHistory,
-    config: subathonConfig,
+    timeRemaining: state?.timeRemaining ?? 0,
+    isActive: state?.isActive ?? false,
+    events,
+    config,
   });
 };
 
-const endSubathon = () => {
-  subathonActive = false;
-  subathonTimeRemaining = 0;
-  subathonStartTimeUnix = null;
-  subathonEndTimeUnix = null;
+const endSubathon = async () => {
+  await db.update(subathonStateTable).set({
+    isActive: false,
+    timeRemaining: 0,
+    startTimeUnix: null,
+    endTimeUnix: null,
+  });
+
+  const [state, events] = await Promise.all([getSubathonState(), getEvents()]);
 
   io.emit("subathonUpdate", {
     timeRemaining: 0,
     isActive: false,
-    events: eventHistory,
+    events,
   });
 };
 
-io.on("connection", (socket: Socket) => {
+io.on("connection", async (socket: Socket) => {
   console.log("a user connected");
+
+  const [state, events] = await Promise.all([getSubathonState(), getEvents()]);
+
   socket.emit("subathonUpdate", {
-    timeRemaining: subathonTimeRemaining,
-    isActive: subathonActive,
-    events: eventHistory,
+    timeRemaining: state?.timeRemaining ?? 0,
+    isActive: state?.isActive ?? false,
+    events,
   });
 
   socket.on("startSubathon", (minutes: number) => {
@@ -166,21 +173,38 @@ io.on("connection", (socket: Socket) => {
   });
 });
 
-const addSubathonTime = (minutes: number) => {
-  if (subathonActive) {
-    console.log("Adding subathon time", minutes);
-    subathonTimeRemaining += minutes * 60;
+const addSubathonTime = async (minutes: number) => {
+  const state = await getSubathonState();
+  if (state?.isActive) {
+    const newTimeRemaining = (state.timeRemaining ?? 0) + minutes * 60;
+
+    await db.update(subathonStateTable).set({
+      timeRemaining: newTimeRemaining,
+      endTimeUnix: (state.startTimeUnix ?? 0) + newTimeRemaining,
+    });
+
+    const [updatedState, config, events] = await Promise.all([
+      getSubathonState(),
+      getSubathonConfig(),
+      getEvents(),
+    ]);
+
     io.emit("subathonUpdate", {
-      timeRemaining: subathonTimeRemaining,
-      isActive: subathonActive,
-      events: eventHistory,
+      timeRemaining: updatedState?.timeRemaining ?? 0,
+      isActive: updatedState?.isActive ?? false,
+      events,
+      config,
     });
   }
 };
 
-const addPoints = (amount: number) => {
-  subathonConfig.points += amount;
-  io.emit("pointsUpdate", subathonConfig.points);
+const addPoints = async (amount: number) => {
+  const config = await getSubathonConfig();
+  const newPoints = (config?.points ?? 0) + amount;
+
+  await db.update(subathonConfigTable).set({ points: newPoints });
+
+  io.emit("pointsUpdate", newPoints);
 };
 
 const start = async () => {
@@ -221,10 +245,15 @@ const start = async () => {
 
   listener.start();
 
-  const addEvent = (event: Event) => {
-    console.log("Adding event", event);
-    console.log(eventHistory);
-    eventHistory.push(event);
+  const addEvent = async (event: Event) => {
+    await db.insert(eventsTable).values({
+      event: event.event,
+      time: event.time,
+      user: event.user,
+    });
+
+    const events = await getEvents();
+    return events;
   };
 
   listener.onChannelRedemptionAdd(userId, async (e) => {

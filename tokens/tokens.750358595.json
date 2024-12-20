@@ -1,5 +1,5 @@
 {
-    "accessToken": "ae5oss0dxbel93iqamij21dvgmalr6",
+    "accessToken": "jig8jye921a1evdfmma2jd8fm9n5y6",
     "refreshToken": "dxdybuh0kngwri122o79c6nm0hekllhi9wzesxvnvvjb8ojr7x",
     "scope": [
         "bits:read",
@@ -13,6 +13,6 @@
         "clips:edit",
         "moderator:read:followers"
     ],
-    "expiresIn": 13267,
-    "obtainmentTimestamp": 1734631672022
+    "expiresIn": 15307,
+    "obtainmentTimestamp": 1734707974490
 }
